@@ -1,7 +1,7 @@
 {
   "name": "買うべき物件 — 鶴岡市・酒田市",
   "short_name": "買うべき物件",
-  "description": "鶴岡市・酒田市の候補物件。毎朝5時に自動更新。",
+  "description": "鶴岡市・酒田市の候補物件。毎日5時と17時に自動更新。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
