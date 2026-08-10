@@ -1,5 +1,5 @@
 // 毎回この版番号が変わるので、更新すると古いキャッシュは自動で捨てられる
-const CACHE = 'bukken-202608101708';
+const CACHE = 'bukken-202608110506';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
                 './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => {
