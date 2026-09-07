@@ -1,9 +1,12 @@
 // 毎回この版番号が変わるので、更新すると古いキャッシュは自動で捨てられる
-const CACHE = 'bukken-202609070534';
-const ASSETS = ['./', './index.html', './manifest.webmanifest',
+const CACHE = 'bukken-202609071735';
+const ASSETS = ['./', './index.html', './tochi.html', './manifest.webmanifest',
                 './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // 1つでも欠けると addAll は全部失敗するので、1件ずつ入れて失敗は無視する
+  e.waitUntil(caches.open(CACHE)
+    .then(c => Promise.all(ASSETS.map(u => c.add(u).catch(() => {}))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
