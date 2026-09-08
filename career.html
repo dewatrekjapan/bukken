@@ -101,6 +101,25 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 
 <!-- 1. ライフデータ -->
 <section class="tab on" id="tab-data">
+  <div class="card warn" id="consent">
+    <h2>はじめに — このツールとデータの扱い</h2>
+    <p class="muted">
+      ライフデータ（投稿・送信メール・予定など）は<b>この端末のブラウザ内</b>に保存され、分析を実行したときだけ AI（Anthropic API、またはこのサービスの中継サーバー）に送信されます。運営者がデータを閲覧・保存することはありません。
+      送信前にメールアドレス・電話番号などは自動でマスクされます（設定で変更可）。
+      AI の出力は推論であり、事実確認と判断はご自身で行ってください。
+    </p>
+    <div class="btnbar"><button class="btn" id="consentBtn">理解して始める</button></div>
+  </div>
+  <div class="card">
+    <h2>Google から自動取り込み</h2>
+    <p class="muted">Gmail の送信メールと Google カレンダーの予定を、ブラウザから直接（サーバーを介さず）取り込みます。2回目以降は前回同期以降の差分だけを取得します。初回は設定タブに Google OAuth クライアント ID が必要です。</p>
+    <div class="btnbar">
+      <button class="btn" id="syncGmail">Gmail 送信メールを同期</button>
+      <button class="btn" id="syncCal">カレンダーを同期</button>
+      <span class="muted" id="syncinfo"></span>
+    </div>
+    <div class="status" id="gstatus"></div>
+  </div>
   <div class="card">
     <h2>プロフィール（任意）</h2>
     <p class="muted">職業・スキル・制約条件・今の状況など。ライフデータの解釈の土台になります。</p>
@@ -236,10 +255,21 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 <!-- 設定 -->
 <section class="tab" id="tab-set">
   <div class="card">
-    <h2>Anthropic API</h2>
-    <label>API キー</label>
-    <input type="password" id="apikey" placeholder="sk-ant-...">
-    <p class="muted">この端末のブラウザにのみ保存され、Anthropic API 以外には送信されません。共用PCでは保存しないでください。</p>
+    <h2>AI への接続</h2>
+    <label>接続方法</label>
+    <select id="auth"><option value="key">自分の Anthropic API キーを使う</option><option value="code">サービスのアクセスコードを使う（中継サーバー経由）</option></select>
+    <div id="authKey">
+      <label>API キー</label>
+      <input type="password" id="apikey" placeholder="sk-ant-...">
+      <p class="muted">この端末のブラウザにのみ保存され、Anthropic API 以外には送信されません。共用PCでは保存しないでください。</p>
+    </div>
+    <div id="authCode" hidden>
+      <label>中継サーバーの URL</label>
+      <input type="text" id="apiBase" placeholder="https://career-ai.example.workers.dev">
+      <label>アクセスコード</label>
+      <input type="password" id="code" placeholder="運営者から受け取ったコード">
+      <p class="muted">API キーは中継サーバー側で管理され、利用者には配布されません。利用量の上限はコードごとに設定されます。</p>
+    </div>
     <div class="row">
       <div><label>モデル</label>
         <select id="model">
@@ -260,6 +290,10 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
   </div>
   <div class="card">
     <h2>データの扱い</h2>
+    <label>Google OAuth クライアント ID（Gmail・カレンダー同期に使用。取得手順は <code>worker/README.md</code>）</label>
+    <input type="text" id="gclient" placeholder="xxxxxxxx.apps.googleusercontent.com">
+    <label>初回同期でさかのぼる期間（か月）</label>
+    <input type="number" id="gmonths" min="1" max="60" value="12">
     <label>自分のメールアドレス（mbox 取り込み時に送信メールだけを抽出するために使用。API には送りません）</label>
     <input type="text" id="myemail" placeholder="you@example.com">
     <div class="check"><input type="checkbox" id="mask" checked><label for="mask">送信前にメールアドレス・電話番号・郵便番号・長い数字列をマスクする</label></div>
@@ -282,24 +316,23 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 </main>
 
 <script>
-(function(){
+(async function(){
 'use strict';
 const $=s=>document.querySelector(s);
-const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){alert('保存容量を超えました。古いデータや履歴を削除してください。')}}};
-const state={
-  profile:LS.get('cs.profile',''),
-  data:LS.get('cs.data',[]),
-  trends:LS.get('cs.trends',[]),
-  history:LS.get('cs.history',[]),
-  model:LS.get('cs.model',null),        // {v, at, model, json, dataIds}
-  modelHist:LS.get('cs.modelHist',[]),  // 過去バージョン
-  feedback:LS.get('cs.feedback',{}),    // key -> {kind,title,status,at}
-  set:Object.assign({apikey:'',model:'claude-opus-5',effort:'high',email:'',mask:true,maxChars:150000},LS.get('cs.set',{})),
-  opts:Object.assign({useSearch:true,searchMax:10,focus:'',scope:'global',horizon:'1y',question:''},LS.get('cs.opts',{}))
-};
+/* 保存先: IndexedDB（localStorage の 5MB 上限を回避）。旧 localStorage データは初回に移行 */
+const DB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('career-ai',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const tx=async(mode,fn)=>{const db=await open();return new Promise((res,rej)=>{const t=db.transaction('kv',mode);const q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)})};
+  return {get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k))}})();
+const DEFAULTS={profile:'',data:[],trends:[],history:[],model:null,modelHist:[],feedback:{},sync:{},
+  set:{auth:'key',apikey:'',apiBase:'https://api.anthropic.com',code:'',model:'claude-opus-5',effort:'high',email:'',mask:true,maxChars:150000,gclient:'',gmonths:12,consent:false},
+  opts:{useSearch:true,searchMax:10,focus:'',scope:'global',horizon:'1y',question:''}};
+const KEYS=Object.keys(DEFAULTS);const state={};
+for(const k of KEYS){let v;try{v=await DB.get('cs.'+k)}catch(e){}
+  if(v===undefined){try{const ls=localStorage.getItem('cs.'+k);if(ls){v=JSON.parse(ls);localStorage.removeItem('cs.'+k)}}catch(e){}}
+  const d=DEFAULTS[k];state[k]=(d&&typeof d==='object'&&!Array.isArray(d))?Object.assign({},d,v||{}):(v===undefined?d:v)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const save=()=>{for(const k of ['profile','data','trends','history','model','modelHist','feedback','set','opts'])LS.set('cs.'+k,state[k])};
+const lastSaved={};const save=()=>{for(const k of KEYS){const j=JSON.stringify(state[k]);if(lastSaved[k]===j)continue;lastSaved[k]=j;DB.set('cs.'+k,JSON.parse(j)).catch(e=>console.error('save',k,e))}};
 const PRICE={'claude-opus-5':[5,25],'claude-fable-5-1':[10,50],'claude-sonnet-5':[2,10],'claude-haiku-4-5':[1,5]};
 
 /* tabs */
@@ -313,10 +346,16 @@ $('#profile').oninput=e=>{state.profile=e.target.value;save()};
 const optEls={useSearch:'#useSearch',searchMax:'#searchMax',focus:'#focus',scope:'#scope',horizon:'#horizon',question:'#question'};
 for(const k in optEls){const el=$(optEls[k]);if(el.type==='checkbox')el.checked=!!state.opts[k];else el.value=state.opts[k]??'';
   el.oninput=el.onchange=()=>{state.opts[k]=el.type==='checkbox'?el.checked:(el.type==='number'?Number(el.value):el.value);save()}}
-$('#apikey').value=state.set.apikey;$('#model').value=state.set.model;$('#effort').value=state.set.effort;
+$('#apikey').value=state.set.apikey;$('#model').value=state.set.model;$('#effort').value=state.set.effort;$('#auth').value=state.set.auth;
+$('#apiBase').value=state.set.apiBase;$('#code').value=state.set.code;$('#gclient').value=state.set.gclient;$('#gmonths').value=state.set.gmonths;
 $('#myemail').value=state.set.email;$('#mask').checked=state.set.mask;$('#maxChars').value=state.set.maxChars;
-$('#saveSet').onclick=()=>{state.set={apikey:$('#apikey').value.trim(),model:$('#model').value,effort:$('#effort').value,
-  email:$('#myemail').value.trim().toLowerCase(),mask:$('#mask').checked,maxChars:Math.max(20000,Number($('#maxChars').value)||150000)};save();$('#setmsg').textContent='保存しました'};
+const authUI=()=>{const c=$('#auth').value==='code';$('#authKey').hidden=c;$('#authCode').hidden=!c};authUI();$('#auth').onchange=authUI;
+$('#saveSet').onclick=()=>{Object.assign(state.set,{auth:$('#auth').value,apikey:$('#apikey').value.trim(),apiBase:($('#apiBase').value.trim()||'https://api.anthropic.com').replace(/\/+$/,''),code:$('#code').value.trim(),
+  model:$('#model').value,effort:$('#effort').value,gclient:$('#gclient').value.trim(),gmonths:Math.max(1,Number($('#gmonths').value)||12),
+  email:$('#myemail').value.trim().toLowerCase(),mask:$('#mask').checked,maxChars:Math.max(20000,Number($('#maxChars').value)||150000)});save();$('#setmsg').textContent='保存しました'};
+const hasAuth=()=>state.set.auth==='code'?!!(state.set.code&&state.set.apiBase):!!state.set.apikey;
+const NOAUTH='設定タブで API キー（またはアクセスコード）を保存してください。';
+$('#consent').hidden=!!state.set.consent;$('#consentBtn').onclick=()=>{state.set.consent=true;save();$('#consent').hidden=true};
 
 /* ===== ライフデータ ===== */
 const coveredIds=()=>new Set(state.model?state.model.dataIds:[]);
@@ -324,7 +363,7 @@ function renderData(){
   const list=$('#dlist');list.innerHTML='';const cov=coveredIds();
   [...state.data].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(d=>{
     const el=document.createElement('div');el.className='item';
-    el.innerHTML=`<div class="body"><div class="meta"><span class="pill">${esc(d.type)}</span>${cov.has(d.id)?'':'<span class="pill good">未反映</span>'}${esc(d.date||'')}${d.src?' · '+esc(d.src):''}</div><div class="txt">${esc(d.text)}</div></div><button class="x" title="削除">×</button>`;
+    el.innerHTML=`<div class="body"><div class="meta"><span class="pill">${esc(d.type)}</span>${cov.has(d.id)?'':'<span class="pill good">未反映</span>'}${esc(d.date||'')}${d.src&&!/^g(mail|cal):/.test(d.src)?' · '+esc(d.src):''}</div><div class="txt">${esc(d.text)}</div></div><button class="x" title="削除">×</button>`;
     el.querySelector('.x').onclick=()=>{state.data=state.data.filter(x=>x.id!==d.id);save();renderData()};
     list.appendChild(el);
   });
@@ -334,7 +373,7 @@ function renderData(){
 }
 function addData(text,type,date,src){text=(text||'').trim();if(!text)return false;
   if(type==='SNS投稿'&&/^RT @/.test(text))return false;
-  if(state.data.some(d=>d.text===text))return false;
+  if(src&&/^g(mail|cal):/.test(src)?state.data.some(d=>d.src===src):state.data.some(d=>d.text===text))return false;
   state.data.push({id:uid(),type,date:date||'',src:src||'',text});return true}
 const isoDate=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toISOString().slice(0,10):''};
 $('#addOne').onclick=()=>{addData($('#dtext').value,$('#dtype').value,$('#ddate').value);$('#dtext').value='';save();renderData()};
@@ -395,6 +434,46 @@ function parseMbox(txt){return txt.split(/^From .*\r?\n/m).filter(m=>m.trim()).m
   const base=location.origin+location.pathname;
   $('#bm').href=`javascript:void(location.href='${base}?text='+encodeURIComponent(String(getSelection())||document.title)+'&url='+encodeURIComponent(location.href))`;
   $('#bm').onclick=e=>{e.preventDefault();alert('このリンクをブックマークバーにドラッグして使います。')}})();
+
+/* ===== Google 同期（ブラウザ直結・サーバー不要） ===== */
+const gStatus=(m,err)=>{const el=$('#gstatus');el.textContent=m;el.className='status on'+(err?' err':'');if(!m)el.className='status'};
+const monthsAgo=n=>{const d=new Date();d.setMonth(d.getMonth()-n);return d.toISOString().slice(0,10)};
+function gsi(){return new Promise((res,rej)=>{if(window.google&&google.accounts)return res();const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.onload=res;sc.onerror=()=>rej(new Error('Google のライブラリを読み込めませんでした'));document.head.appendChild(sc)})}
+let gToken=null,gTokenAt=0;
+async function gAuth(){if(gToken&&Date.now()-gTokenAt<50*60*1000)return gToken;
+  if(!state.set.gclient)throw new Error('設定タブに Google OAuth クライアント ID を入れてください（手順は worker/README.md）');await gsi();
+  return new Promise((res,rej)=>{google.accounts.oauth2.initTokenClient({client_id:state.set.gclient,
+    scope:'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly',
+    callback:r=>{if(r.access_token){gToken=r.access_token;gTokenAt=Date.now();res(gToken)}else rej(new Error(r.error||'Google 認証に失敗しました'))},
+    error_callback:e=>rej(new Error(e.message||e.type||'Google 認証に失敗しました'))}).requestAccessToken()})}
+async function gFetch(url,token){const r=await fetch(url,{headers:{authorization:'Bearer '+token}});if(!r.ok)throw new Error('Google API '+r.status+': '+(await r.text()).slice(0,200));return r.json()}
+const b64url=d=>Uint8Array.from(atob(d.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+function gmailText(payload){const parts=[];const walk=p=>{if(!p)return;if(p.parts)p.parts.forEach(walk);else parts.push(p)};walk(payload);
+  const pick=parts.find(p=>p.mimeType==='text/plain'&&p.body&&p.body.data)||parts.find(p=>p.mimeType==='text/html'&&p.body&&p.body.data);if(!pick)return '';
+  const cs=(((pick.headers||[]).find(h=>h.name.toLowerCase()==='content-type')||{}).value||'').match(/charset="?([\w-]+)"?/i);
+  let t;try{t=new TextDecoder((cs?cs[1]:'utf-8').toLowerCase()).decode(b64url(pick.body.data))}catch(e){t=new TextDecoder().decode(b64url(pick.body.data))}
+  return pick.mimeType==='text/html'?stripHtml(t):t}
+async function syncGmail(){const token=await gAuth();const since=state.sync.gmail||monthsAgo(state.set.gmonths);
+  const q=encodeURIComponent(`in:sent after:${since.replace(/-/g,'/')}`);let pageToken='';const ids=[];
+  do{const j=await gFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=100${pageToken?'&pageToken='+pageToken:''}`,token);
+    (j.messages||[]).forEach(m=>ids.push(m.id));pageToken=j.nextPageToken||'';gStatus(`送信メール一覧を取得中… ${ids.length}件`)}while(pageToken&&ids.length<3000);
+  const have=new Set(state.data.map(d=>d.src));const todo=ids.filter(id=>!have.has('gmail:'+id));let n=0,done=0;
+  for(let i=0;i<todo.length;i+=5){await Promise.all(todo.slice(i,i+5).map(async id=>{const m=await gFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,token);
+      const H=k=>((m.payload.headers||[]).find(h=>h.name.toLowerCase()===k)||{}).value||'';const text=stripQuotes(gmailText(m.payload));done++;if(text.length<20)return;
+      if(addData(`件名: ${H('subject')}\n宛先: ${H('to')}\n\n${text}`,'送信メール',isoDate(Number(m.internalDate)),'gmail:'+id))n++}));
+    gStatus(`メール本文を取得中… ${done}/${todo.length}`);save()}
+  state.sync.gmail=new Date().toISOString().slice(0,10);save();renderData();return n}
+async function syncCal(){const token=await gAuth();const since=state.sync.cal||monthsAgo(state.set.gmonths);let pageToken='',n=0;const have=new Set(state.data.map(d=>d.src));
+  do{const j=await gFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin=${encodeURIComponent(since+'T00:00:00Z')}&timeMax=${encodeURIComponent(new Date().toISOString())}${pageToken?'&pageToken='+pageToken:''}`,token);
+    (j.items||[]).forEach(ev=>{if(ev.status==='cancelled'||!ev.summary||have.has('gcal:'+ev.id))return;const start=(ev.start||{}).date||(ev.start||{}).dateTime||'';
+      const txt=[`予定: ${ev.summary}`,ev.location?`場所: ${ev.location}`:'',ev.attendees&&ev.attendees.length?`参加者: ${ev.attendees.length}名`:'',ev.description?stripHtml(ev.description).slice(0,800):''].filter(Boolean).join('\n');
+      if(addData(txt,'行動ログ',isoDate(start),'gcal:'+ev.id))n++});
+    pageToken=j.nextPageToken||'';gStatus(`予定を取得中… ${n}件`)}while(pageToken);
+  state.sync.cal=new Date().toISOString().slice(0,10);save();renderData();return n}
+async function runSync(fn,label){const btns=['#syncGmail','#syncCal'];btns.forEach(b=>$(b).disabled=true);
+  try{const n=await fn();gStatus(`${label}: ${n}件を追加しました。`)}catch(e){gStatus(e.message,true)}finally{btns.forEach(b=>$(b).disabled=false);syncInfo()}}
+const syncInfo=()=>{$('#syncinfo').textContent=[state.sync.gmail?`Gmail 前回 ${state.sync.gmail}`:'',state.sync.cal?`カレンダー 前回 ${state.sync.cal}`:''].filter(Boolean).join(' · ')};syncInfo();
+$('#syncGmail').onclick=()=>runSync(syncGmail,'Gmail');$('#syncCal').onclick=()=>runSync(syncCal,'カレンダー');
 
 /* ===== トレンド ===== */
 function renderTrends(){
@@ -497,8 +576,10 @@ function userResultMsg(){const parts=[];
 
 /* ===== API ===== */
 let ctrl=null;
-const headers=()=>{const h={'content-type':'application/json','x-api-key':state.set.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+const headers=()=>{const h={'content-type':'application/json','anthropic-version':'2023-06-01'};
+  if(state.set.auth==='code')h['authorization']='Bearer '+state.set.code;else{h['x-api-key']=state.set.apikey;h['anthropic-dangerous-direct-browser-access']='true'}
   if(useFallback())h['anthropic-beta']='server-side-fallback-2026-07-01';return h};
+const endpoint=p=>(state.set.auth==='code'?state.set.apiBase:'https://api.anthropic.com')+p;
 const useFallback=()=>['claude-opus-5','claude-fable-5-1'].includes(state.set.model);
 function baseBody(system,user,schema,withSearch){
   const m=state.set.model;const haiku=m==='claude-haiku-4-5';
@@ -510,7 +591,7 @@ function baseBody(system,user,schema,withSearch){
 async function apiError(res){let msg='';try{const j=await res.json();msg=j.error?.message||JSON.stringify(j)}catch(e){msg=await res.text()}
   const err=new Error(`HTTP ${res.status}: ${msg}`);err.status=res.status;err.body=msg;return err}
 async function streamOnce(body,onProgress){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:headers(),body:JSON.stringify(body),signal:ctrl.signal});
+  const res=await fetch(endpoint('/v1/messages'),{method:'POST',headers:headers(),body:JSON.stringify(body),signal:ctrl.signal});
   if(!res.ok)throw await apiError(res);
   const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
   const blocks=[];let stop=null,model='',usage=null,textLen=0,searches=0;
@@ -549,7 +630,7 @@ function parseJSON(text){try{return JSON.parse(text)}catch(e){}
   const m=text.match(/```(?:json)?\s*([\s\S]*?)```/);if(m){try{return JSON.parse(m[1])}catch(e){}}
   const a=text.indexOf('{'),b=text.lastIndexOf('}');if(a>=0&&b>a){try{return JSON.parse(text.slice(a,b+1))}catch(e){}}return null}
 async function countTokens(body){const b={model:body.model,system:body.system,messages:body.messages};if(body.tools)b.tools=body.tools;
-  const res=await fetch('https://api.anthropic.com/v1/messages/count_tokens',{method:'POST',headers:headers(),body:JSON.stringify(b)});if(!res.ok)throw await apiError(res);return (await res.json()).input_tokens}
+  const res=await fetch(endpoint('/v1/messages/count_tokens'),{method:'POST',headers:headers(),body:JSON.stringify(b)});if(!res.ok)throw await apiError(res);return (await res.json()).input_tokens}
 const fmtUsage=u=>u?`in ${(u.input_tokens||0).toLocaleString()} / out ${(u.output_tokens||0).toLocaleString()} tokens ≈ $${cost(u).toFixed(2)}`:'';
 const cost=u=>{const p=PRICE[state.set.model]||[5,25];return ((u.input_tokens||0)*p[0]+(u.output_tokens||0)*p[1])/1e6};
 const errMsg=e=>e.name==='AbortError'?'中止しました。':e.status===401?'API キーが無効です。設定を確認してください。':e.status===429?'レート制限に達しました。しばらく待って再実行してください。\n'+e.message:'エラー: '+e.message+(e.raw?'\n\n'+e.raw.slice(0,2000):'');
@@ -576,7 +657,7 @@ async function updateModel(setStatus,force){
   return usage}
 function mStatus(msg,err){const s=$('#mstatus');s.textContent=msg;s.className='status on'+(err?' err':'');if(!msg)s.className='status'}
 async function runModelOnly(force){
-  if(!state.set.apikey){mStatus('設定タブで API キーを保存してください。',true);return}
+  if(!hasAuth()){mStatus(NOAUTH,true);return}
   if(!state.data.length){mStatus('ライフデータがありません。',true);return}
   if(force&&!confirm('既存のモデルを破棄して全データから再構築します。よろしいですか？'))return;
   ctrl=new AbortController();const t0=Date.now();
@@ -590,7 +671,7 @@ $('#copyModel').onclick=()=>{if(state.model)navigator.clipboard.writeText(modelM
 /* ===== ステージ2: 分析 ===== */
 function setStatus(msg,err){const s=$('#status');s.textContent=msg;s.className='status on'+(err?' err':'');if(!msg)s.className='status'}
 async function analyze(updateFirst){
-  if(!state.set.apikey){setStatus('設定タブで API キーを保存してください。',true);return}
+  if(!hasAuth()){setStatus(NOAUTH,true);return}
   if(!state.data.length){setStatus('ライフデータが1件もありません。',true);return}
   ctrl=new AbortController();['#runBtn','#runOnlyBtn','#estBtn'].forEach(s=>$(s).disabled=true);$('#stopBtn').disabled=false;
   const t0=Date.now();const el=()=>`　（${Math.round((Date.now()-t0)/1000)}秒）`;let mu=null;
@@ -608,7 +689,7 @@ async function analyze(updateFirst){
   finally{['#runBtn','#runOnlyBtn','#estBtn'].forEach(s=>$(s).disabled=false);$('#stopBtn').disabled=true;ctrl=null}
 }
 async function estimate(){
-  if(!state.set.apikey){setStatus('設定タブで API キーを保存してください。',true);return}
+  if(!hasAuth()){setStatus(NOAUTH,true);return}
   setStatus('見積もり中…');const p=PRICE[state.set.model]||[5,25];
   try{const lines=[];const fresh=state.data.filter(d=>!coveredIds().has(d.id));
     if(fresh.length){let tot=0;for(const b of batches(fresh))tot+=await countTokens(baseBody(SYS_MODEL,userModelMsg(b),MODEL_SCHEMA,false));lines.push(`モデル更新: 未反映 ${fresh.length}件 → 入力 約${tot.toLocaleString()} tokens（入力のみで約 $${(tot*p[0]/1e6).toFixed(2)}）`)}
@@ -686,16 +767,16 @@ function renderHist(){
     el.onclick=()=>{renderResult(rec,$('#result'));goTab('run')};h.appendChild(el)});
 }
 $('#hclear').onclick=()=>{if(confirm('分析履歴を削除しますか？')){state.history=[];save();renderHist();$('#result').innerHTML=''}};
-$('#exportAll').onclick=()=>{const {apikey,...set}=state.set;const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify({profile:state.profile,data:state.data,trends:state.trends,history:state.history,model:state.model,modelHist:state.modelHist,feedback:state.feedback,opts:state.opts,set},null,1)],{type:'application/json'}));
+$('#exportAll').onclick=()=>{const {apikey,code,...set}=state.set;const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({profile:state.profile,data:state.data,trends:state.trends,history:state.history,model:state.model,modelHist:state.modelHist,feedback:state.feedback,sync:state.sync,opts:state.opts,set},null,1)],{type:'application/json'}));
   a.download='career-ai-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
 $('#importAll').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());
-  for(const k of ['profile','data','trends','history','model','modelHist','feedback'])if(j[k]!==undefined)state[k]=j[k];
-  if(j.opts)state.opts={...state.opts,...j.opts};if(j.set)state.set={...state.set,...j.set,apikey:state.set.apikey};save();location.reload()}catch(err){alert('読み込めませんでした: '+err.message)}e.target.value=''};
+  for(const k of ['profile','data','trends','history','model','modelHist','feedback','sync'])if(j[k]!==undefined)state[k]=j[k];
+  if(j.opts)state.opts={...state.opts,...j.opts};if(j.set)state.set={...state.set,...j.set,apikey:state.set.apikey,code:state.set.code};save();await new Promise(r=>setTimeout(r,300));location.reload()}catch(err){alert('読み込めませんでした: '+err.message)}e.target.value=''};
 
 renderData();renderTrends();renderModel();renderHist();
 if(state.history[0]&&state.history[0].result)renderResult(state.history[0],$('#result'));
-window.CS={parseMbox,maskPII,batches,state};
+window.CS={parseMbox,maskPII,batches,gmailText,state,save};
 })();
 </script>
 </body>
