@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ライフデータ × トレンド — 自己実現支援AI</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="SNS投稿・メール・行動履歴などのライフデータからユーザーの考え方と目標をAIがモデル化し、国内外のトレンドと掛け合わせて、次に起こすべきアクションとマッチング機会を導き出す。">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<meta name="theme-color" content="#0c2036">
+<style>
+:root{
+  --paper:#f6f8fa; --card:#fff; --line:#dfe6ed; --text:#1b2733; --muted:#5b6b7c;
+  --ink:#16324f; --accent:#1f5fa8; --accentbg:#e8f0fa; --gold:#a8870b; --goldbg:#fff8e2;
+  --good:#1b6e1b; --goodbg:#eaf5ea; --bad:#a3262c; --badbg:#fbeaea;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --paper:#0f1720; --card:#17222e; --line:#2a3a4a; --text:#e4ebf2; --muted:#95a6b8;
+    --ink:#8fb3d9; --accent:#7fb0e8; --accentbg:#1a2a3d; --gold:#e0bb45; --goldbg:#2a2312;
+    --good:#7cc47c; --goodbg:#14251a; --bad:#f08a8f; --badbg:#3a1b1e; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif}
+header{background:var(--ink);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:700}
+header .sub{font-size:12px;opacity:.8}
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+nav.tabs button{background:var(--card);border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+nav.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+section.tab{display:none}
+section.tab.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 8px;color:var(--ink)}
+.card h3{font-size:14px;margin:12px 0 6px}
+.muted{color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px}
+input[type=text],input[type=password],input[type=date],input[type=number],select,textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--text);font:inherit}
+textarea{min-height:120px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1;min-width:160px}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font:inherit;font-size:14px}
+.btn.sec{background:var(--card);color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.btnbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accentbg);color:var(--accent);margin-right:6px}
+.pill.gold{background:var(--goldbg);color:var(--gold)}
+.pill.good{background:var(--goodbg);color:var(--good)}
+.item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;display:flex;gap:10px;align-items:flex-start}
+.item .body{flex:1;min-width:0}
+.item .txt{white-space:pre-wrap;word-break:break-word;font-size:13px;max-height:120px;overflow:auto}
+.item .meta{font-size:12px;color:var(--muted)}
+.x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px}
+.status{padding:10px 12px;border-radius:8px;background:var(--accentbg);color:var(--accent);font-size:13px;white-space:pre-wrap;display:none}
+.status.err{background:var(--badbg);color:var(--bad)}
+.status.on{display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.rcard{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--paper)}
+.rcard h4{margin:0 0 4px;font-size:14px}
+.rcard p{margin:4px 0;font-size:13px}
+.rcard ul{margin:4px 0;padding-left:18px;font-size:13px}
+.score{float:right;font-weight:700;color:var(--gold)}
+blockquote{margin:4px 0;padding:4px 10px;border-left:3px solid var(--line);color:var(--muted);font-size:12px}
+details summary{cursor:pointer;color:var(--accent);font-size:13px}
+pre.raw{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--paper);padding:10px;border-radius:8px;max-height:400px;overflow:auto}
+.hist{cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+.hist:hover{background:var(--accentbg)}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0}
+.check input{width:auto}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ライフデータ × トレンド — 自己実現支援AI</h1>
+    <div class="sub">あなたの投稿・メール・行動履歴から「考え方と目標」をモデル化し、国内外のトレンドと掛け合わせて、いま起こすべきアクションと機会を導き出す</div>
+  </div>
+</header>
+<main>
+<nav class="tabs">
+  <button data-tab="data" class="on">1. ライフデータ</button>
+  <button data-tab="trend">2. トレンド</button>
+  <button data-tab="run">3. 分析・提案</button>
+  <button data-tab="hist">履歴</button>
+  <button data-tab="set">設定</button>
+</nav>
+
+<!-- 1. ライフデータ -->
+<section class="tab on" id="tab-data">
+  <div class="card">
+    <h2>プロフィール（任意）</h2>
+    <p class="muted">職業・スキル・制約条件・今の状況など。ライフデータの解釈の土台になります。</p>
+    <textarea id="profile" placeholder="例：不動産と経理が本業。法人と物件を実際に動かせる。AIを日常的に業務利用。YouTube・音楽のコンテンツ制作経験あり。住む場所は固定しない前提。"></textarea>
+  </div>
+  <div class="card">
+    <h2>ライフデータを追加</h2>
+    <p class="muted">SNS投稿、送信メール、日記・メモ、行動ログ（予定・購入・閲覧など）を貼り付け。1件ずつでも、空行2つ区切りの一括貼り付けでも可。</p>
+    <div class="row">
+      <div><label>種類</label>
+        <select id="dtype">
+          <option value="SNS投稿">SNS投稿</option>
+          <option value="送信メール">送信メール</option>
+          <option value="日記・メモ">日記・メモ</option>
+          <option value="行動ログ">行動ログ（予定・購入・閲覧など）</option>
+          <option value="検索履歴">検索履歴</option>
+          <option value="その他">その他</option>
+        </select></div>
+      <div><label>日付（任意）</label><input type="date" id="ddate"></div>
+    </div>
+    <label>本文</label>
+    <textarea id="dtext" placeholder="ここに貼り付け"></textarea>
+    <div class="btnbar">
+      <button class="btn" id="addOne">1件として追加</button>
+      <button class="btn sec" id="addBulk">空行2つで分割して一括追加</button>
+      <label class="btn sec" style="margin:0">ファイルから読み込む<input type="file" id="dfile" multiple accept=".txt,.md,.csv,.json,.js,.eml" hidden></label>
+    </div>
+    <p class="muted">対応：テキスト／CSV／JSON（X の tweets.js、汎用JSON配列）。ファイル内容はブラウザ内でのみ処理され、分析実行時に Anthropic API へ送られます。</p>
+  </div>
+  <div class="card">
+    <h2>登録済みライフデータ <span class="pill" id="dcount">0件</span><span class="pill gold" id="dchars">0文字</span></h2>
+    <div id="dlist"></div>
+    <div class="btnbar"><button class="btn sec danger" id="dclear">すべて削除</button></div>
+  </div>
+</section>
+
+<!-- 2. トレンド -->
+<section class="tab" id="tab-trend">
+  <div class="card">
+    <h2>AIによるトレンド収集</h2>
+    <div class="check"><input type="checkbox" id="useSearch" checked><label for="useSearch" style="margin:0;color:var(--text)">分析時に AI が Web 検索して国内外の最新トレンド・市場動向・先進事例を取得する</label></div>
+    <div class="row">
+      <div><label>検索回数の上限</label><input type="number" id="searchMax" min="1" max="20" value="8"></div>
+      <div><label>注目領域（任意・カンマ区切り）</label><input type="text" id="focus" placeholder="例：不動産テック, AI×会計, クリエイターエコノミー, 海外投資家向けサービス"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>手動で追加するトレンド素材</h2>
+    <p class="muted">記事本文、ニュースレター、レポートの抜粋、URL とメモなど。AI の検索結果と合わせて使われます。</p>
+    <input type="text" id="ttitle" placeholder="タイトル／出典（任意）">
+    <textarea id="ttext" placeholder="本文やメモを貼り付け"></textarea>
+    <div class="btnbar"><button class="btn" id="taddBtn">追加</button></div>
+  </div>
+  <div class="card">
+    <h2>登録済みトレンド素材 <span class="pill" id="tcount">0件</span></h2>
+    <div id="tlist"></div>
+    <div class="btnbar"><button class="btn sec danger" id="tclear">すべて削除</button></div>
+  </div>
+</section>
+
+<!-- 3. 分析 -->
+<section class="tab" id="tab-run">
+  <div class="card">
+    <h2>分析の条件</h2>
+    <div class="row">
+      <div><label>提案の射程</label>
+        <select id="scope">
+          <option value="global">全国・海外を既定の市場とする（地理で絞らない）</option>
+          <option value="japan">日本全国</option>
+          <option value="local">現在の生活圏を優先</option>
+        </select></div>
+      <div><label>時間軸</label>
+        <select id="horizon">
+          <option value="3m">3か月</option>
+          <option value="1y" selected>1年</option>
+          <option value="3y">3年</option>
+          <option value="10y">10年</option>
+        </select></div>
+    </div>
+    <label>今回とくに知りたいこと（任意）</label>
+    <textarea id="question" style="min-height:70px" placeholder="例：手持ちの資産の組み合わせで、まだ誰もやっていない接続はどこにあるか。次の四半期で着手すべきことは何か。"></textarea>
+    <div class="btnbar">
+      <button class="btn" id="runBtn">分析を実行</button>
+      <button class="btn sec" id="stopBtn" disabled>中止</button>
+      <span class="muted" id="runinfo"></span>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+  <div id="result"></div>
+</section>
+
+<!-- 履歴 -->
+<section class="tab" id="tab-hist">
+  <div class="card">
+    <h2>分析履歴</h2>
+    <p class="muted">端末内（localStorage）に保存。クリックで表示。</p>
+    <div id="hlist"></div>
+    <div class="btnbar">
+      <button class="btn sec" id="exportAll">全データをJSONで書き出す</button>
+      <label class="btn sec" style="margin:0">JSONを読み込む<input type="file" id="importAll" accept=".json" hidden></label>
+      <button class="btn sec danger" id="hclear">履歴を削除</button>
+    </div>
+  </div>
+</section>
+
+<!-- 設定 -->
+<section class="tab" id="tab-set">
+  <div class="card">
+    <h2>Anthropic API</h2>
+    <label>API キー</label>
+    <input type="password" id="apikey" placeholder="sk-ant-...">
+    <p class="muted">この端末のブラウザにのみ保存され、Anthropic API 以外には送信されません。共用PCでは保存しないでください。</p>
+    <div class="row">
+      <div><label>モデル</label>
+        <select id="model">
+          <option value="claude-opus-5">Claude Opus 5（既定）</option>
+          <option value="claude-fable-5-1">Claude Fable 5.1（最上位・高コスト）</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5（低コスト）</option>
+        </select></div>
+      <div><label>思考の深さ（effort）</label>
+        <select id="effort">
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high" selected>high</option>
+          <option value="xhigh">xhigh</option>
+          <option value="max">max</option>
+        </select></div>
+    </div>
+    <div class="btnbar"><button class="btn" id="saveSet">保存</button><span class="muted" id="setmsg"></span></div>
+  </div>
+  <div class="card">
+    <h2>この仕組みについて</h2>
+    <p class="muted">
+      ①ライフデータ（SNS投稿・送信メール・行動履歴）からユーザーの考え方・キャリア観・人生の目標をモデル化し、
+      ②国内外の最新トレンド・市場動向・先進事例を合流させ、
+      ③両者を掛け合わせて、目標に近づくために今起こすべきアクション、必要な情報、最適なビジネスやコミュニティとのマッチング機会を導き出す。
+      データはすべてブラウザ内に保持され、分析実行時のみ Anthropic API に送信されます。
+    </p>
+  </div>
+</section>
+<footer>ライフデータ × トレンド 自己実現支援AI</footer>
+</main>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const state={
+  profile:LS.get('cs.profile',''),
+  data:LS.get('cs.data',[]),
+  trends:LS.get('cs.trends',[]),
+  history:LS.get('cs.history',[]),
+  set:LS.get('cs.set',{apikey:'',model:'claude-opus-5',effort:'high'}),
+  opts:LS.get('cs.opts',{useSearch:true,searchMax:8,focus:'',scope:'global',horizon:'1y',question:''})
+};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const save=()=>{LS.set('cs.profile',state.profile);LS.set('cs.data',state.data);LS.set('cs.trends',state.trends);LS.set('cs.history',state.history);LS.set('cs.set',state.set);LS.set('cs.opts',state.opts)};
+
+/* tabs */
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('on',s.id==='tab-'+b.dataset.tab));
+});
+
+/* profile / options binding */
+$('#profile').value=state.profile;
+$('#profile').oninput=e=>{state.profile=e.target.value;save()};
+const optEls={useSearch:'#useSearch',searchMax:'#searchMax',focus:'#focus',scope:'#scope',horizon:'#horizon',question:'#question'};
+for(const k in optEls){const el=$(optEls[k]);if(el.type==='checkbox')el.checked=!!state.opts[k];else el.value=state.opts[k]??'';
+  el.oninput=el.onchange=()=>{state.opts[k]=el.type==='checkbox'?el.checked:(el.type==='number'?Number(el.value):el.value);save()}}
+$('#apikey').value=state.set.apikey;$('#model').value=state.set.model;$('#effort').value=state.set.effort;
+$('#saveSet').onclick=()=>{state.set={apikey:$('#apikey').value.trim(),model:$('#model').value,effort:$('#effort').value};save();$('#setmsg').textContent='保存しました'};
+
+/* life data */
+function renderData(){
+  const list=$('#dlist');list.innerHTML='';
+  const sorted=[...state.data].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  sorted.forEach(d=>{
+    const el=document.createElement('div');el.className='item';
+    el.innerHTML=`<div class="body"><div class="meta"><span class="pill">${esc(d.type)}</span>${esc(d.date||'')}${d.src?' · '+esc(d.src):''}</div><div class="txt">${esc(d.text)}</div></div><button class="x" title="削除">×</button>`;
+    el.querySelector('.x').onclick=()=>{state.data=state.data.filter(x=>x.id!==d.id);save();renderData()};
+    list.appendChild(el);
+  });
+  $('#dcount').textContent=state.data.length+'件';
+  $('#dchars').textContent=state.data.reduce((n,d)=>n+d.text.length,0).toLocaleString()+'文字';
+}
+function addData(text,type,date,src){text=(text||'').trim();if(!text)return;state.data.push({id:uid(),type,date:date||'',src:src||'',text})}
+$('#addOne').onclick=()=>{addData($('#dtext').value,$('#dtype').value,$('#ddate').value);$('#dtext').value='';save();renderData()};
+$('#addBulk').onclick=()=>{$('#dtext').value.split(/\n\s*\n\s*\n/).forEach(t=>addData(t,$('#dtype').value,$('#ddate').value));$('#dtext').value='';save();renderData()};
+$('#dfile').onchange=async e=>{
+  for(const f of e.target.files){
+    const txt=await f.text();const type=$('#dtype').value;
+    if(/\.(json|js)$/i.test(f.name)){
+      let raw=txt.replace(/^[^\[{]*=\s*/,'');let arr;
+      try{arr=JSON.parse(raw)}catch(err){addData(txt,type,'',f.name);continue}
+      if(!Array.isArray(arr))arr=[arr];
+      arr.forEach(o=>{const t=o.tweet||o;const text=t.full_text||t.text||t.body||t.content||t.message||(typeof t==='string'?t:JSON.stringify(t));
+        const dt=t.created_at||t.date||t.timestamp||'';const d=dt?new Date(dt):null;
+        addData(text,type,d&&!isNaN(d)?d.toISOString().slice(0,10):'',f.name)});
+    }else if(/\.csv$/i.test(f.name)){
+      txt.split(/\r?\n/).slice(1).forEach(l=>addData(l,type,'',f.name));
+    }else{
+      const parts=txt.split(/\n\s*\n\s*\n/);(parts.length>1?parts:[txt]).forEach(t=>addData(t,type,'',f.name));
+    }
+  }
+  e.target.value='';save();renderData();
+};
+$('#dclear').onclick=()=>{if(confirm('ライフデータをすべて削除しますか？')){state.data=[];save();renderData()}};
+
+/* trends */
+function renderTrends(){
+  const list=$('#tlist');list.innerHTML='';
+  state.trends.forEach(t=>{
+    const el=document.createElement('div');el.className='item';
+    el.innerHTML=`<div class="body"><div class="meta">${esc(t.title||'（無題）')} · ${esc(t.added)}</div><div class="txt">${esc(t.text)}</div></div><button class="x" title="削除">×</button>`;
+    el.querySelector('.x').onclick=()=>{state.trends=state.trends.filter(x=>x.id!==t.id);save();renderTrends()};
+    list.appendChild(el);
+  });
+  $('#tcount').textContent=state.trends.length+'件';
+}
+$('#taddBtn').onclick=()=>{const text=$('#ttext').value.trim();if(!text)return;
+  state.trends.push({id:uid(),title:$('#ttitle').value.trim(),text,added:new Date().toISOString().slice(0,10)});$('#ttext').value='';$('#ttitle').value='';save();renderTrends()};
+$('#tclear').onclick=()=>{if(confirm('トレンド素材をすべて削除しますか？')){state.trends=[];save();renderTrends()}};
+
+/* ===== analysis ===== */
+const SCHEMA={type:'object',additionalProperties:false,
+  required:['summary','user_model','trends','intersections','actions','matches','information_needs','open_questions'],
+  properties:{
+    summary:{type:'string',description:'全体の結論。3〜6文'},
+    user_model:{type:'object',additionalProperties:false,required:['thinking_style','values','explicit_goals','latent_goals','strengths','constraints','evidence'],
+      properties:{
+        thinking_style:{type:'string'},values:{type:'array',items:{type:'string'}},
+        explicit_goals:{type:'array',items:{type:'string'}},latent_goals:{type:'array',items:{type:'string'},description:'本人が明言していないが、データから読み取れる目標や願望'},
+        strengths:{type:'array',items:{type:'string'}},constraints:{type:'array',items:{type:'string'}},
+        evidence:{type:'array',items:{type:'object',additionalProperties:false,required:['quote','inference'],properties:{quote:{type:'string',description:'ライフデータからの短い引用'},inference:{type:'string'}}}}}},
+    trends:{type:'array',items:{type:'object',additionalProperties:false,required:['title','summary','relevance','source'],
+      properties:{title:{type:'string'},summary:{type:'string'},relevance:{type:'string',description:'この人にとってなぜ重要か'},source:{type:'string',description:'出典名やURL。不明なら空文字'}}}},
+    intersections:{type:'array',description:'本人の目標・資産とトレンドの交点。まだ誰もやっていない接続を優先',items:{type:'object',additionalProperties:false,required:['opportunity','why_now','why_you','fit_score','risks'],
+      properties:{opportunity:{type:'string'},why_now:{type:'string'},why_you:{type:'string'},fit_score:{type:'integer',minimum:1,maximum:10},risks:{type:'string'}}}},
+    actions:{type:'array',items:{type:'object',additionalProperties:false,required:['title','timeframe','steps','expected_outcome','effort'],
+      properties:{title:{type:'string'},timeframe:{type:'string',enum:['今週','今月','四半期以内','1年以内','それ以降']},steps:{type:'array',items:{type:'string'}},expected_outcome:{type:'string'},effort:{type:'string',enum:['小','中','大']}}}},
+    matches:{type:'array',description:'接続すべきビジネス・コミュニティ・人物像・情報源',items:{type:'object',additionalProperties:false,required:['kind','name','why','how_to_reach'],
+      properties:{kind:{type:'string',enum:['ビジネス','コミュニティ','人物像','情報源','制度・資金']},name:{type:'string'},why:{type:'string'},how_to_reach:{type:'string'}}}},
+    information_needs:{type:'array',items:{type:'string'},description:'目標に近づくために今必要な情報'},
+    open_questions:{type:'array',items:{type:'string'},description:'モデル化の精度を上げるために本人に確認したいこと'}
+  }};
+
+function buildSystem(){
+  const scope={global:'提案の市場・商圏は全国および海外を既定とする。居住地や現在の生活圏を上限にしない。地理はコスト条件であって市場の上限ではない。「地方だからできない」を前提にせず、需要と単価のある市場から逆算する。地域振興・地方創生の文脈に寄せない。',
+    japan:'提案の市場・商圏は日本全国を射程とする。',local:'現在の生活圏で実行できる提案を優先する。'}[state.opts.scope];
+  const horizon={'3m':'3か月','1y':'1年','3y':'3年','10y':'10年'}[state.opts.horizon];
+  return `あなたは、個人のライフデータと世の中のトレンドを統合して自己実現を支援するAIです。
+
+手順:
+1. ライフデータ（SNS投稿・送信メール・日記・行動ログなど）を読み込み、この人の考え方・価値観・キャリア観・人生の目標をモデル化する。明言された目標だけでなく、繰り返し現れる関心・言い回し・行動パターンから潜在的な目標を読み取る。推論には必ずデータからの引用を根拠として添える。
+2. 国内外の最新トレンド・市場動向・先進事例を把握する。${state.opts.useSearch?'web_search ツールを使い、最新情報を実際に検索して確認する。検索は具体的なクエリで、この人に関係する領域に絞る。':'与えられたトレンド素材と自身の知識に基づく。'}
+3. 本人の目標・資産とトレンドを掛け合わせ、目標に近づくために今起こすべきアクション、必要な情報、接続すべきビジネス・コミュニティ・人物像を導き出す。既知の選択肢を並べるより、手持ちの資産の組み合わせから生まれる、まだ誰もやっていない接続を優先する。
+
+方針:
+- ${scope}
+- 時間軸は${horizon}。
+- 一般論ではなく、この人のデータに固有の根拠に基づいて書く。
+- 日本語で、指定のJSONスキーマに従って出力する。`;
+}
+function buildUser(){
+  const parts=[];
+  if(state.profile.trim())parts.push('# プロフィール\n'+state.profile.trim());
+  parts.push('# ライフデータ（'+state.data.length+'件）\n'+[...state.data].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(d=>`[${d.type}${d.date?' '+d.date:''}]\n${d.text}`).join('\n\n'));
+  if(state.trends.length)parts.push('# 手動で追加したトレンド素材\n'+state.trends.map(t=>`## ${t.title||'（無題）'}\n${t.text}`).join('\n\n'));
+  if(state.opts.focus.trim())parts.push('# 注目領域\n'+state.opts.focus.trim());
+  if(state.opts.question.trim())parts.push('# 今回とくに知りたいこと\n'+state.opts.question.trim());
+  parts.push('# 今日の日付\n'+new Date().toISOString().slice(0,10));
+  return parts.join('\n\n');
+}
+
+let ctrl=null;
+function setStatus(msg,err){const s=$('#status');s.textContent=msg;s.className='status on'+(err?' err':'');if(!msg)s.className='status'}
+
+async function streamOnce(body,onProgress){
+  const headers={'content-type':'application/json','x-api-key':state.set.apikey,'anthropic-version':'2023-06-01',
+    'anthropic-dangerous-direct-browser-access':'true','anthropic-beta':'server-side-fallback-2026-07-01'};
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,body:JSON.stringify(body),signal:ctrl.signal});
+  if(!res.ok){let msg='';try{const j=await res.json();msg=j.error?.message||JSON.stringify(j)}catch(e){msg=await res.text()}
+    const err=new Error(`HTTP ${res.status}: ${msg}`);err.status=res.status;err.body=msg;throw err}
+  const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+  const blocks=[];let stop=null,model='',usage=null,textLen=0,searches=0;
+  const handle=ev=>{
+    if(ev.type==='message_start'){model=ev.message.model}
+    else if(ev.type==='content_block_start'){const b=JSON.parse(JSON.stringify(ev.content_block));if(b.type==='text')b.text=b.text||'';if(b.type==='thinking')b.thinking=b.thinking||'';if(b.type==='server_tool_use'){b._json='';searches++;onProgress(`Web検索中 (${searches}回目)…`)}blocks[ev.index]=b}
+    else if(ev.type==='content_block_delta'){const b=blocks[ev.index];const d=ev.delta;
+      if(d.type==='text_delta'){b.text+=d.text;textLen+=d.text.length;onProgress(`生成中… ${textLen.toLocaleString()}文字`)}
+      else if(d.type==='input_json_delta'){b._json+=d.partial_json}
+      else if(d.type==='thinking_delta'){b.thinking+=d.thinking;onProgress('思考中…')}
+      else if(d.type==='signature_delta'){b.signature=d.signature}}
+    else if(ev.type==='content_block_stop'){const b=blocks[ev.index];if(b&&b._json!==undefined){try{b.input=JSON.parse(b._json||'{}')}catch(e){b.input={}}delete b._json}}
+    else if(ev.type==='message_delta'){stop=ev.delta.stop_reason;usage=ev.usage||usage}
+    else if(ev.type==='error'){throw new Error(ev.error?.message||'stream error')}
+  };
+  while(true){const {value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});
+    let i;while((i=buf.indexOf('\n\n'))>=0){const chunk=buf.slice(0,i);buf=buf.slice(i+2);
+      const line=chunk.split('\n').find(l=>l.startsWith('data:'));if(!line)continue;
+      let ev;try{ev=JSON.parse(line.slice(5).trim())}catch(e){continue}handle(ev)}}
+  return {content:blocks.filter(Boolean),stop_reason:stop,model,usage};
+}
+
+async function analyze(){
+  if(!state.set.apikey){setStatus('設定タブで API キーを保存してください。',true);return}
+  if(!state.data.length){setStatus('ライフデータが1件もありません。',true);return}
+  ctrl=new AbortController();$('#runBtn').disabled=true;$('#stopBtn').disabled=false;
+  const t0=Date.now();setStatus('送信中…');
+  const body={model:state.set.model,max_tokens:32000,stream:true,fallbacks:'default',
+    system:buildSystem(),messages:[{role:'user',content:buildUser()}],
+    output_config:{effort:state.set.effort,format:{type:'json_schema',schema:SCHEMA}}};
+  if(state.set.model==='claude-haiku-4-5'){body.max_tokens=16000;delete body.output_config.effort}
+  else body.thinking={type:'adaptive'};
+  if(state.opts.useSearch)body.tools=[{type:state.set.model==='claude-haiku-4-5'?'web_search_20250305':'web_search_20260209',name:'web_search',max_uses:Math.max(1,Math.min(20,state.opts.searchMax||8))}];
+  let useFormat=true;
+  try{
+    let final,rounds=0;
+    while(true){
+      let r;
+      try{r=await streamOnce(body,m=>setStatus(m+`　（${Math.round((Date.now()-t0)/1000)}秒）`))}
+      catch(e){
+        if(useFormat&&e.status===400&&/output_config|format|json_schema/i.test(e.body||'')){useFormat=false;delete body.output_config.format;setStatus('構造化出力なしで再試行…');continue}
+        throw e}
+      final=r;
+      if(r.stop_reason==='pause_turn'&&rounds++<6){body.messages.push({role:'assistant',content:r.content});setStatus('続きを生成中…');continue}
+      break;
+    }
+    if(final.stop_reason==='refusal')throw new Error('モデルがこのリクエストへの応答を辞退しました（refusal）。入力内容を見直してください。');
+    if(final.stop_reason==='max_tokens')setStatus('出力が上限に達しました。結果が途中で切れている可能性があります。',true);
+    const text=final.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    const parsed=parseJSON(text);
+    const sources=[];final.content.forEach(b=>{if(b.type==='web_search_tool_result'&&Array.isArray(b.content))b.content.forEach(r=>{if(r.url)sources.push({title:r.title||r.url,url:r.url})})});
+    const rec={id:uid(),at:new Date().toISOString(),model:final.model||body.model,usage:final.usage,opts:{...state.opts},dataCount:state.data.length,result:parsed,raw:parsed?null:text,sources};
+    state.history.unshift(rec);state.history=state.history.slice(0,50);save();renderHist();
+    setStatus('');$('#runinfo').textContent=`完了 ${Math.round((Date.now()-t0)/1000)}秒 · ${rec.model}`+(final.usage?` · in ${final.usage.input_tokens?.toLocaleString()} / out ${final.usage.output_tokens?.toLocaleString()} tokens`:'');
+    renderResult(rec,$('#result'));
+  }catch(e){
+    if(e.name==='AbortError')setStatus('中止しました。',true);
+    else if(e.status===401)setStatus('API キーが無効です。設定を確認してください。',true);
+    else if(e.status===429)setStatus('レート制限に達しました。しばらく待って再実行してください。\n'+e.message,true);
+    else setStatus('エラー: '+e.message,true);
+  }finally{$('#runBtn').disabled=false;$('#stopBtn').disabled=true;ctrl=null}
+}
+function parseJSON(text){try{return JSON.parse(text)}catch(e){}
+  const m=text.match(/```(?:json)?\s*([\s\S]*?)```/);if(m){try{return JSON.parse(m[1])}catch(e){}}
+  const a=text.indexOf('{'),b=text.lastIndexOf('}');if(a>=0&&b>a){try{return JSON.parse(text.slice(a,b+1))}catch(e){}}return null}
+$('#runBtn').onclick=analyze;
+$('#stopBtn').onclick=()=>ctrl&&ctrl.abort();
+
+/* render */
+const li=a=>(a||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+function renderResult(rec,root){
+  const r=rec.result;const when=new Date(rec.at).toLocaleString('ja-JP');
+  if(!r){root.innerHTML=`<div class="card"><h2>結果（JSONとして解釈できませんでした）</h2><pre class="raw">${esc(rec.raw||'')}</pre></div>`;return}
+  const u=r.user_model||{};
+  root.innerHTML=`
+  <div class="card"><h2>結論 <span class="muted">${esc(when)} · ${esc(rec.model)}</span></h2><p>${esc(r.summary)}</p>
+    <div class="btnbar"><button class="btn sec" id="copyMd">Markdownをコピー</button><button class="btn sec" id="dlMd">Markdownを保存</button></div></div>
+  <div class="card"><h2>1. あなたのモデル（データから読み取った考え方と目標）</h2>
+    <p><b>思考の型：</b>${esc(u.thinking_style)}</p>
+    <div class="grid">
+      <div class="rcard"><h4>価値観</h4><ul>${li(u.values)}</ul></div>
+      <div class="rcard"><h4>明言している目標</h4><ul>${li(u.explicit_goals)}</ul></div>
+      <div class="rcard"><h4>秘めた・潜在的な目標</h4><ul>${li(u.latent_goals)}</ul></div>
+      <div class="rcard"><h4>強み・資産</h4><ul>${li(u.strengths)}</ul></div>
+      <div class="rcard"><h4>制約</h4><ul>${li(u.constraints)}</ul></div>
+    </div>
+    <details><summary>根拠となる引用 ${(u.evidence||[]).length}件</summary>${(u.evidence||[]).map(e=>`<blockquote>「${esc(e.quote)}」<br>→ ${esc(e.inference)}</blockquote>`).join('')}</details>
+  </div>
+  <div class="card"><h2>2. 関連トレンド</h2><div class="grid">${(r.trends||[]).map(t=>`<div class="rcard"><h4>${esc(t.title)}</h4><p>${esc(t.summary)}</p><p><b>なぜ重要か：</b>${esc(t.relevance)}</p>${t.source?`<p class="muted">${linkify(t.source)}</p>`:''}</div>`).join('')}</div>
+    ${rec.sources&&rec.sources.length?`<details><summary>検索で参照したページ ${rec.sources.length}件</summary><ul>${rec.sources.map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a></li>`).join('')}</ul></details>`:''}
+  </div>
+  <div class="card"><h2>3. 交点 — 目標×トレンドから生まれる機会</h2><div class="grid">${(r.intersections||[]).sort((a,b)=>b.fit_score-a.fit_score).map(i=>`<div class="rcard"><span class="score">${i.fit_score}/10</span><h4>${esc(i.opportunity)}</h4><p><b>なぜ今：</b>${esc(i.why_now)}</p><p><b>なぜあなた：</b>${esc(i.why_you)}</p><p><b>リスク：</b>${esc(i.risks)}</p></div>`).join('')}</div></div>
+  <div class="card"><h2>4. 今起こすべきアクション</h2>${(r.actions||[]).map(a=>`<div class="rcard" style="margin:8px 0"><span class="pill">${esc(a.timeframe)}</span><span class="pill gold">労力 ${esc(a.effort)}</span><h4 style="margin-top:6px">${esc(a.title)}</h4><ol style="font-size:13px;margin:4px 0;padding-left:20px">${li(a.steps)}</ol><p><b>期待される結果：</b>${esc(a.expected_outcome)}</p></div>`).join('')}</div>
+  <div class="card"><h2>5. マッチング — 接続すべきビジネス・コミュニティ・人・情報源</h2><div class="grid">${(r.matches||[]).map(m=>`<div class="rcard"><span class="pill good">${esc(m.kind)}</span><h4 style="margin-top:6px">${esc(m.name)}</h4><p>${esc(m.why)}</p><p><b>アプローチ：</b>${esc(m.how_to_reach)}</p></div>`).join('')}</div></div>
+  <div class="card"><h2>6. 今必要な情報</h2><ul>${li(r.information_needs)}</ul><h3>モデルの精度を上げるための確認事項</h3><ul>${li(r.open_questions)}</ul></div>`;
+  $('#copyMd').onclick=()=>navigator.clipboard.writeText(toMd(rec)).then(()=>{$('#copyMd').textContent='コピーしました'});
+  $('#dlMd').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([toMd(rec)],{type:'text/markdown'}));a.download='career-analysis-'+rec.at.slice(0,10)+'.md';a.click()};
+}
+function linkify(s){return /^https?:\/\//.test(s)?`<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`:esc(s)}
+function toMd(rec){const r=rec.result,u=r.user_model||{};const L=a=>(a||[]).map(x=>'- '+x).join('\n');
+  return `# 自己実現支援AI 分析 ${rec.at.slice(0,10)}\n\n## 結論\n${r.summary}\n\n## 1. あなたのモデル\n**思考の型：** ${u.thinking_style}\n\n### 価値観\n${L(u.values)}\n\n### 明言している目標\n${L(u.explicit_goals)}\n\n### 潜在的な目標\n${L(u.latent_goals)}\n\n### 強み・資産\n${L(u.strengths)}\n\n### 制約\n${L(u.constraints)}\n\n### 根拠\n${(u.evidence||[]).map(e=>`- 「${e.quote}」 → ${e.inference}`).join('\n')}\n\n## 2. 関連トレンド\n${(r.trends||[]).map(t=>`### ${t.title}\n${t.summary}\n\n**なぜ重要か：** ${t.relevance}${t.source?`\n\n出典: ${t.source}`:''}`).join('\n\n')}\n\n## 3. 交点\n${(r.intersections||[]).map(i=>`### ${i.opportunity}（適合度 ${i.fit_score}/10）\n- なぜ今：${i.why_now}\n- なぜあなた：${i.why_you}\n- リスク：${i.risks}`).join('\n\n')}\n\n## 4. アクション\n${(r.actions||[]).map(a=>`### ${a.title}（${a.timeframe}／労力 ${a.effort}）\n${(a.steps||[]).map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\n期待される結果：${a.expected_outcome}`).join('\n\n')}\n\n## 5. マッチング\n${(r.matches||[]).map(m=>`- **[${m.kind}] ${m.name}** — ${m.why}（アプローチ：${m.how_to_reach}）`).join('\n')}\n\n## 6. 今必要な情報\n${L(r.information_needs)}\n\n## 確認事項\n${L(r.open_questions)}\n`}
+
+/* history */
+function renderHist(){
+  const h=$('#hlist');h.innerHTML=state.history.length?'':'<p class="muted">まだ分析はありません。</p>';
+  state.history.forEach(rec=>{const el=document.createElement('div');el.className='hist';
+    el.innerHTML=`<b>${esc(new Date(rec.at).toLocaleString('ja-JP'))}</b> <span class="muted">${esc(rec.model)} · データ${rec.dataCount}件</span><div class="muted">${esc((rec.result?.summary||rec.raw||'').slice(0,120))}</div>`;
+    el.onclick=()=>{renderResult(rec,$('#result'));document.querySelector('nav.tabs button[data-tab=run]').click()};h.appendChild(el)});
+}
+$('#hclear').onclick=()=>{if(confirm('分析履歴を削除しますか？')){state.history=[];save();renderHist();$('#result').innerHTML=''}};
+$('#exportAll').onclick=()=>{const {apikey,...set}=state.set;const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({profile:state.profile,data:state.data,trends:state.trends,history:state.history,opts:state.opts,set},null,1)],{type:'application/json'}));
+  a.download='career-ai-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
+$('#importAll').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());
+  if(j.profile!==undefined)state.profile=j.profile;if(Array.isArray(j.data))state.data=j.data;if(Array.isArray(j.trends))state.trends=j.trends;
+  if(Array.isArray(j.history))state.history=j.history;if(j.opts)state.opts={...state.opts,...j.opts};save();location.reload()}catch(err){alert('読み込めませんでした: '+err.message)}e.target.value=''};
+
+renderData();renderTrends();renderHist();
+if(state.history[0])renderResult(state.history[0],$('#result'));
+})();
+</script>
+</body>
+</html>
