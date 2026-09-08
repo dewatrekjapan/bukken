@@ -1,0 +1,12 @@
+name = "career-ai-relay"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+DAILY_REQUESTS = "20"
+ALLOWED_ORIGIN = "https://dewatrekjapan.github.io"
+ALLOWED_MODELS = "claude-opus-5,claude-sonnet-5,claude-haiku-4-5"
+
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
